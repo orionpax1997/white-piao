@@ -1,0 +1,36 @@
+import { EntityConstants } from './entity-constants';
+
+export const SOURCE_CONSTANTS: EntityConstants = {
+  TABLE_NAME: 'sources',
+  IDENTIFIER: '_id',
+  FIELD_NAMES: [
+    'objectId',
+    'name',
+    'baseURL',
+    'author',
+    'authorEmail',
+    'searchTime',
+    'searchScript',
+    'findSeriesScript',
+    'findStreamScript',
+    'createdAt',
+    'updatedAt',
+    'resourceServerUrl',
+    'isEnabled',
+  ],
+  FIELDS: {
+    OBJECT_ID: 'objectId',
+    NAME: 'name',
+    BASE_URL: 'baseURL',
+    AUTHOR: 'author',
+    AUTHOR_EMAIL: 'authorEmail',
+    SEARCH_TIME: 'searchTime',
+    SEARCH_SCRIPT: 'searchScript',
+    FIND_SERIES_SCRIPT: 'findSeriesScript',
+    FIND_STREAM_SCRIPT: 'findStreamScript',
+    CREATED_AT: 'createdAt',
+    UPDATED_AT: 'updatedAt',
+    RESOURCE_SERVER_URL: 'resourceServerUrl',
+    IS_ENABLED: 'isEnabled',
+  },
+};
