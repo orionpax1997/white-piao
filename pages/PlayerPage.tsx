@@ -27,6 +27,7 @@ import {
 } from 'native-base';
 import { useEffect, useState, useRef } from 'react';
 import { Dimensions } from 'react-native';
+import GoogleCast, { CastButton, CastState, useCastState, useRemoteMediaClient } from 'react-native-google-cast';
 
 import { VideoInfo } from '../components';
 import { EPISODE_CONSTANTS, EPISODE_SOURCE_CONSTANTS } from '../constants';
@@ -66,6 +67,8 @@ export default function PlayerPage() {
   } = useFavorite();
   const { byId } = useSource();
   const [inFullscreen, setInFullsreen] = useState(false);
+  const client = useRemoteMediaClient();
+  const castState = useCastState();
   const refVideo = useRef<any>(null);
   const navigation = useNavigation<any>();
   const toast = useToast();
@@ -79,13 +82,32 @@ export default function PlayerPage() {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', async () => {
+      if (inFullscreen) {
+        await setStatusBarHidden(false, 'none');
+        setInFullsreen(!inFullscreen);
+        lockAsync(OrientationLock.DEFAULT);
+      }
       setStatusBarStyle('dark');
       setStatusBarBackgroundColor('#0891b2', false);
       await updateFavoriteHistoryStatus(historyStatus);
     });
 
     return unsubscribe;
-  }, [favorite, historyStatus]);
+  }, [favorite, historyStatus, inFullscreen]);
+
+  useEffect(() => {
+    if (client && castState === CastState.CONNECTED && streamUrl) {
+      client
+        .loadMedia({
+          autoplay: true,
+          mediaInfo: {
+            contentUrl: streamUrl,
+            contentType: 'application/x-mpegURL',
+          },
+        })
+        .catch(err => toast.show({ description: err }));
+    }
+  }, [client, castState, streamUrl]);
 
   useEffect(() => {
     activateKeepAwake();
@@ -240,47 +262,57 @@ export default function PlayerPage() {
     <>
       {streamUrl ? (
         <Box safeAreaTop>
-          <ZStack>
-            <VideoPlayer
-              fullscreen={{
-                enterFullscreen: async () => {
-                  await setStatusBarHidden(true, 'none');
-                  setInFullsreen(!inFullscreen);
-                  lockAsync(OrientationLock.LANDSCAPE_RIGHT);
-                },
-                exitFullscreen: async () => {
-                  await setStatusBarHidden(false, 'none');
-                  setInFullsreen(!inFullscreen);
-                  lockAsync(OrientationLock.DEFAULT);
-                },
-                inFullscreen,
-              }}
-              videoProps={{
-                shouldPlay: true,
-                ref: refVideo,
-                resizeMode: ResizeMode.CONTAIN,
-                source: {
-                  uri: streamUrl,
-                  overrideFileExtensionAndroid: 'm3u8',
-                },
-              }}
-              style={{
-                height: inFullscreen ? Dimensions.get('window').width : 200,
-                width: inFullscreen ? Dimensions.get('window').height : Dimensions.get('window').width,
-              }}
-            />
-            {!inFullscreen && (
-              <IconButton
-                borderRadius="full"
-                className="text-xl"
-                icon={<Icon className="text-white" as={<Ionicons name="chevron-back" />} />}
-                onPress={() => {
-                  navigation.goBack();
+          {castState !== CastState.CONNECTED && (
+            <ZStack>
+              <VideoPlayer
+                fullscreen={{
+                  enterFullscreen: async () => {
+                    await setStatusBarHidden(true, 'none');
+                    setInFullsreen(!inFullscreen);
+                    lockAsync(OrientationLock.LANDSCAPE_RIGHT);
+                  },
+                  exitFullscreen: async () => {
+                    await setStatusBarHidden(false, 'none');
+                    setInFullsreen(!inFullscreen);
+                    lockAsync(OrientationLock.DEFAULT);
+                  },
+                  inFullscreen,
+                }}
+                videoProps={{
+                  shouldPlay: true,
+                  ref: refVideo,
+                  resizeMode: ResizeMode.CONTAIN,
+                  source: {
+                    uri: streamUrl,
+                    overrideFileExtensionAndroid: 'm3u8',
+                  },
+                }}
+                style={{
+                  height: inFullscreen ? Dimensions.get('window').width : 200,
+                  width: inFullscreen ? Dimensions.get('window').height : Dimensions.get('window').width,
                 }}
               />
-            )}
-          </ZStack>
+              {!inFullscreen && (
+                <IconButton
+                  borderRadius="full"
+                  className="text-xl"
+                  icon={<Icon className="text-white" as={<Ionicons name="chevron-back" />} />}
+                  onPress={() => {
+                    navigation.goBack();
+                  }}
+                />
+              )}
+            </ZStack>
+          )}
           <Row>
+            {castState === CastState.CONNECTED && (
+              <IconButton
+                className="text-xl"
+                borderRadius="full"
+                icon={<Icon className="text-pink-800" as={<Ionicons name="chevron-back" />} />}
+                onPress={() => navigation.goBack()}
+              />
+            )}
             {favoriting ? (
               <Spinner color="pink.800" className="w-10" />
             ) : favorite == null ? (
@@ -304,6 +336,7 @@ export default function PlayerPage() {
               icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
               onPress={() => openBrowserAsync(episodes[historyStatus.currEpisode].playPageUrl)}
             />
+            <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginTop: 8, marginLeft: 8 }} />
             <Spacer />
             {historyStatus.currEpisode > 0 && (
               <IconButton
@@ -325,10 +358,12 @@ export default function PlayerPage() {
         </Box>
       ) : (
         <Box safeAreaTop>
-          <Spinner size="lg" className="h-[200px] bg-black" />
+          {castState !== CastState.CONNECTED && <Spinner size="lg" className="h-[200px] bg-black" />}
           <Row className="h-10 items-center p-3" space={5}>
+            {castState === CastState.CONNECTED && <Skeleton size="5" rounded="full" startColor="pink.200" />}
             <Skeleton size="5" rounded="full" startColor="pink.200" />
             <Skeleton size="5" rounded="full" startColor="pink.200" />
+            <Skeleton size="5" />
             <Spacer />
             <Skeleton size="5" rounded="full" startColor="pink.200" />
             <Skeleton size="5" rounded="full" startColor="pink.200" />

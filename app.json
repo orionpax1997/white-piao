@@ -3,7 +3,7 @@
     "name": "white-piao",
     "slug": "white-piao",
     "owner": "humble.xiang",
-    "version": "1.0.0",
+    "version": "0.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,9 +15,7 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.humblex.whitepiao"
@@ -37,6 +35,19 @@
       "eas": {
         "projectId": "fbc13c33-1419-47c4-87b5-5f97d847ad30"
       }
+    },
+    "plugins": ["@config-plugins/react-native-google-cast", "sentry-expo"],
+    "hooks": {
+      "postPublish": [
+        {
+          "file": "sentry-expo/upload-sourcemaps",
+          "config": {
+            "organization": "humble-xiang",
+            "project": "white-piao",
+            "authToken": "3d5169d38d52456f992edb2db63d54b18be16950db5c4d489109ec604be89fc7"
+          }
+        }
+      ]
     }
   }
 }

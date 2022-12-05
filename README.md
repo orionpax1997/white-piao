@@ -14,8 +14,11 @@ Pre-release 期，请自行前往 [Latest Releases](https://github.com/Humble-Xi
 
 ## 常见问题
 
-- 电视机、投影仪应该怎么使用？  
-  白嫖 React Native 版，暂时不考虑兼容 Android TV。在播放页提供了从浏览器打开的按钮，可以通过支持投屏的浏览器直接投屏来看。后续考虑实现 DLAN 协议以提供更好的使用体验。
+- 电视机、投影仪应该怎么使用？
+  - 白嫖 React Native 版，暂时不考虑兼容 Android TV。
+  - 在播放页提供了 Google Cast Button 支持通过 [Google Cast](https://developers.google.com/cast) 投屏。Andriod TV，Chromecast 等硬件默认支持，国产电视、投影仪可安装 [CastReceiver](https://github.com/Humble-Xiang/white-piao/releases/latest) 应用支持。
+  - 在播放页提供了从浏览器打开的按钮，可以通过支持投屏的浏览器直接投屏来看。
+  - 后续考虑实现 DLAN 协议以提供更好的使用体验。
 
 ## 感谢
 

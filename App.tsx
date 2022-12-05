@@ -3,10 +3,17 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { setStatusBarBackgroundColor } from 'expo-status-bar';
 import { NativeBaseProvider } from 'native-base';
 import { useEffect } from 'react';
+import * as Sentry from 'sentry-expo';
 
 import { HomePage, SearchPage, PlayerPage } from './pages';
 
 const Stack = createNativeStackNavigator();
+
+Sentry.init({
+  dsn: 'https://2a97b2858eca4a549dc242960c7b67f8@o4504251402616832.ingest.sentry.io/4504251406745600',
+  enableInExpoDevelopment: true,
+  debug: false,
+});
 
 export default function App() {
   useEffect(() => {
