@@ -12,16 +12,19 @@ const sourceProvider = SourceProvider.getProvider();
 
 export default function SearchPage() {
   const [loading, setLoading] = useState(false);
-  const { list: searchItemList, init: initSearchList, concat } = useSearchList();
   const { list: sourceList, byId, setById } = useSource();
   const { init: initVideoInfo, setVideoInfo } = usePlayer();
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const { list: searchItemList, init: initSearchList, concat } = useSearchList();
   const toast = useToast();
+  const route = useRoute<any>();
+  const navigation = useNavigation<any>();
 
   const { keyword } = route.params;
 
   useEffect(() => {
+    /**
+     * 对特定来源进行搜索
+     */
     const loadSearchItemListBySource = async (source: Source) => {
       try {
         const res = await axios.post(
@@ -32,45 +35,44 @@ export default function SearchPage() {
           },
           { timeout: 15000 }
         );
+        // 搜索结果合并
         concat(
           res.data.data.map((item: Favorite) => {
             return { ...item, sourceId: source.id, sourceName: source.name };
           })
         );
+        // 更新来源搜索时间
         source.searchTime = res.data.time;
-        sourceProvider.update(source);
         setById({ ...byId, [source.id!]: source });
+        sourceProvider.update(source);
       } catch {
         toast.show({ description: `${source.name} 搜索失败` });
       }
     };
 
-    const loadSearchItemList = async () => {
+    const init = async () => {
       initSearchList();
       setLoading(true);
       await Promise.all(
-        sourceList
-          .filter(id => byId[id].isEnabled === 1)
-          .map(id => byId[id])
-          .map(async source => loadSearchItemListBySource(source))
+        sourceList.filter(id => byId[id].isEnabled === 1).map(id => loadSearchItemListBySource(byId[id]))
       );
       setLoading(false);
     };
 
-    loadSearchItemList();
+    init();
   }, []);
+
+  const onFavoriteCardPress = (item: Favorite) => {
+    initVideoInfo();
+    setVideoInfo(item);
+    navigation.navigate('PlayerPage');
+  };
 
   return (
     <WithLoading loading={loading}>
       <ScrollView>
         {searchItemList.map((item, index) => (
-          <PressableCard
-            key={index}
-            onPress={() => {
-              initVideoInfo();
-              setVideoInfo(item);
-              navigation.navigate('PlayerPage');
-            }}>
+          <PressableCard key={index} onPress={() => onFavoriteCardPress(item)}>
             <VideoInfo {...item} />
           </PressableCard>
         ))}

@@ -17,76 +17,75 @@ export default function SettingsPage() {
   const [serverConfig, setServerConfig] = useState<Config | null>(null);
   const [editResourceServerUrl, setEditResourceServerUrl] = useState<string>('');
   const [showEditResourceServerUrl, setShowEditResourceServerUrl] = useState(false);
-  const toast = useToast();
   const { needReSync, setById, setList, setNeedReSync } = useSource();
+  const toast = useToast();
 
   useEffect(() => {
-    if (!serverConfig) {
-      init();
-    }
+    const init = async () => {
+      const [row] = await configProvider.read(`${CONFIG_CONSTANTS.FIELDS.NAME} = ?`, ['resouce-server-url']);
+      setServerConfig(Config.fromMap(row));
+    };
+
+    init();
   }, []);
 
   useEffect(() => {
+    /**
+     * 同步资源
+     */
+    const syncSources = async () => {
+      setLoading(true);
+      try {
+        if (serverConfig) {
+          const res = await axios.get(`${serverConfig.value}/api/sources/enabled`, { timeout: 5000 });
+          if (res.status === 200) {
+            const sources = await sourceProvider.read(`${SOURCE_CONSTANTS.FIELDS.RESOURCE_SERVER_URL} = ?`, [
+              serverConfig.value,
+            ]);
+            const objectIds = sources.map(source => source.objectId);
+            // 存在的修改，不存在的新增
+            await Promise.all(
+              res.data.map(async (item: any) => {
+                const idx = objectIds.indexOf(item.objectId);
+                if (idx !== -1) {
+                  await sourceProvider.update(Source.fromMap({ ...sources[idx], ...item }));
+                } else {
+                  await sourceProvider.create(
+                    Source.fromMap({ ...item, resourceServerUrl: serverConfig.value, isEnabled: 1 })
+                  );
+                }
+              })
+            );
+            toast.show({ description: '同步成功' });
+
+            const rows = await sourceProvider.read();
+            setById({
+              ...rows.reduce((byId, item) => {
+                byId[item[SOURCE_CONSTANTS.IDENTIFIER]] = Source.fromMap(item);
+                return byId;
+              }, {}),
+            });
+            setList(rows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
+            setNeedReSync(false);
+          }
+        }
+      } catch {
+        toast.show({ description: '同步失败' });
+      }
+      setLoading(false);
+    };
+
     if (needReSync) {
       syncSources();
     }
   }, [needReSync, serverConfig]);
 
-  /**
-   * 初始化
-   */
-  const init = async () => {
-    const [row] = await configProvider.read(`${CONFIG_CONSTANTS.FIELDS.NAME} = ?`, ['resouce-server-url']);
-    setServerConfig(Config.fromMap(row));
+  const onResourceServerPress = () => {
+    setEditResourceServerUrl(serverConfig?.value ?? '');
+    setShowEditResourceServerUrl(true);
   };
 
-  /**
-   * 同步资源
-   */
-  const syncSources = async () => {
-    setLoading(true);
-    try {
-      if (serverConfig) {
-        const res = await axios.get(`${serverConfig.value}/api/sources/enabled`, { timeout: 5000 });
-        if (res.status === 200) {
-          const sources = await sourceProvider.read(`${SOURCE_CONSTANTS.FIELDS.RESOURCE_SERVER_URL} = ?`, [
-            serverConfig.value,
-          ]);
-          const objectIds = sources.map(source => source.objectId);
-          await Promise.all(
-            res.data.map(async (item: any) => {
-              const idx = objectIds.indexOf(item.objectId);
-              if (idx !== -1) {
-                await sourceProvider.update(Source.fromMap({ ...sources[idx], ...item }));
-              } else {
-                await sourceProvider.create(
-                  Source.fromMap({ ...item, resourceServerUrl: serverConfig.value, isEnabled: 1 })
-                );
-              }
-            })
-          );
-          toast.show({ description: '同步成功' });
-          const rows = await sourceProvider.read();
-          setById({
-            ...rows.reduce((byId, item) => {
-              byId[item[SOURCE_CONSTANTS.IDENTIFIER]] = Source.fromMap(item);
-              return byId;
-            }, {}),
-          });
-          setList(rows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
-          setNeedReSync(false);
-        }
-      }
-    } catch {
-      toast.show({ description: '同步失败' });
-    }
-    setLoading(false);
-  };
-
-  /**
-   * 保存资源服务地址
-   */
-  const saveEditResourceServerUrl = async () => {
+  const onSavePress = async () => {
     setShowEditResourceServerUrl(false);
     if (editResourceServerUrl !== serverConfig?.value) {
       setLoading(true);
@@ -112,10 +111,7 @@ export default function SettingsPage() {
           title={'服务地址'}
           description={`${serverConfig?.value ?? 'loading...'}`}
           icon={<MaterialCommunityIcons name="web" />}
-          onPress={() => {
-            setEditResourceServerUrl(serverConfig?.value ?? '');
-            setShowEditResourceServerUrl(true);
-          }}
+          onPress={onResourceServerPress}
         />
         <Item
           title={'同步资源'}
@@ -141,12 +137,10 @@ export default function SettingsPage() {
                 variant="ghost"
                 colorScheme="blueGray"
                 size="sm"
-                onPress={() => {
-                  setShowEditResourceServerUrl(false);
-                }}>
+                onPress={() => setShowEditResourceServerUrl(false)}>
                 Cancel
               </Button>
-              <Button variant="ghost" size="sm" onPress={saveEditResourceServerUrl}>
+              <Button variant="ghost" size="sm" onPress={onSavePress}>
                 Save
               </Button>
             </Button.Group>

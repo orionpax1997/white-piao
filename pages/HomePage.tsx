@@ -9,54 +9,20 @@ import FavoritesPage from './FavoritesPage';
 import SettingsPage from './SettingsPage';
 import SourcesPage from './SourcesPage';
 
-const renderIcon = (key: string, focused: boolean) => {
-  if (focused) {
-    if (key === 'favorite') {
-      return <MaterialIcons name="favorite" />;
-    } else if (key === 'source') {
-      return <Ionicons name="card" />;
-    } else {
-      return <Ionicons name="settings" />;
-    }
-  } else {
-    if (key === 'favorite') {
-      return <MaterialIcons name="favorite-outline" />;
-    } else if (key === 'source') {
-      return <Ionicons name="card-outline" />;
-    } else {
-      return <Ionicons name="settings-outline" />;
-    }
-  }
-};
-
-const renderTabBar = (props: any) => (
-  <Box className="bg-cyan-600">
-    <TabBar
-      {...props}
-      renderIcon={({ route, focused }) => (
-        <Icon as={renderIcon(route.key, focused)} className={`${focused ? 'text-pink-800' : 'text-white'} mb-1`} />
-      )}
-      style={{ backgroundColor: '' }}
-      indicatorStyle={{ backgroundColor: '' }}
-    />
-  </Box>
-);
-
-const renderScene = SceneMap({
+const sceneMap = SceneMap({
   favorite: FavoritesPage,
   source: SourcesPage,
   settings: SettingsPage,
 });
 
 export default function HomePage() {
-  const layout = useWindowDimensions();
-
-  const [index, setIndex] = useState(0);
   const [routes] = useState([
     { key: 'favorite', title: '收藏' },
     { key: 'source', title: '来源' },
     { key: 'settings', title: '设置' },
   ]);
+  const [index, setIndex] = useState(0);
+  const layout = useWindowDimensions();
 
   return (
     <>
@@ -65,7 +31,7 @@ export default function HomePage() {
         tabBarPosition="bottom"
         renderTabBar={renderTabBar}
         navigationState={{ index, routes }}
-        renderScene={renderScene}
+        renderScene={sceneMap}
         onIndexChange={setIndex}
         initialLayout={{ width: layout.width }}
       />
@@ -74,9 +40,8 @@ export default function HomePage() {
 }
 
 const AppBar = () => {
-  const navigation = useNavigation<any>();
-
   const [keyword, setKeyword] = useState<string>('');
+  const navigation = useNavigation<any>();
 
   return (
     <Box safeAreaTop className="bg-cyan-600">
@@ -111,4 +76,37 @@ const AppBar = () => {
       </Row>
     </Box>
   );
+};
+
+const renderTabBar = (props: any) => (
+  <Box className="bg-cyan-600">
+    <TabBar
+      {...props}
+      renderIcon={({ route, focused }) => (
+        <Icon as={renderIcon(route.key, focused)} className={`${focused ? 'text-pink-800' : 'text-white'} mb-1`} />
+      )}
+      style={{ backgroundColor: '' }}
+      indicatorStyle={{ backgroundColor: '' }}
+    />
+  </Box>
+);
+
+const renderIcon = (key: string, focused: boolean) => {
+  if (focused) {
+    if (key === 'favorite') {
+      return <MaterialIcons name="favorite" />;
+    } else if (key === 'source') {
+      return <Ionicons name="card" />;
+    } else {
+      return <Ionicons name="settings" />;
+    }
+  } else {
+    if (key === 'favorite') {
+      return <MaterialIcons name="favorite-outline" />;
+    } else if (key === 'source') {
+      return <Ionicons name="card-outline" />;
+    } else {
+      return <Ionicons name="settings-outline" />;
+    }
+  }
 };

@@ -19,7 +19,6 @@ const episodeSourceProvider = EpisodeSourceProvider.getProvider();
 export default function FavoritesPage() {
   const [loading, setLoading] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
-  const navigation = useNavigation<any>();
   const {
     list,
     byId,
@@ -32,64 +31,46 @@ export default function FavoritesPage() {
     setEpisodeSourcesById,
     setEpisodeCountById,
   } = useFavorite();
-  const { setVideoInfo, setHistoryStatus, setFavorite, setEpisodes, setEpisodeSources } = usePlayer();
   const { byId: sourceById } = useSource();
+  const { setVideoInfo, setHistoryStatus, setFavorite, setEpisodes, setEpisodeSources } = usePlayer();
   const toast = useToast();
+  const navigation = useNavigation<any>();
+
   let tempById: { [id: number]: Favorite } = {};
   let tempEpisodesById: { [id: number]: Episode[] } = {};
   let tempEpisodeSourcesById: { [id: number]: EpisodeSource[] } = {};
   let tempEpisodeCountById: { [id: number]: number } = {};
 
   useEffect(() => {
-    if (list.length === 0) {
-      loadFavorite();
-    }
+    const init = async () => {
+      setLoading(true);
+      const favoriteList = await favoriteProvider.read();
+      const episodeList = await episodeProvider.read();
+      const episodeSourceList = await episodeSourceProvider.read();
+      setById({
+        ...favoriteList.reduce((byId, favorite) => {
+          byId[favorite[FAVORITE_CONSTANTS.IDENTIFIER]] = Favorite.fromMap(favorite);
+          return byId;
+        }, {}),
+      });
+      setList(favoriteList.map(favorite => favorite[FAVORITE_CONSTANTS.IDENTIFIER]));
+      const groupByFavoriteId = groupBy(
+        episodeList.map(episode => Episode.fromMap(episode)),
+        episode => episode.favoriteId!
+      );
+      setEpisodesById(groupByFavoriteId);
+      setEpisodeCountById(map(groupByFavoriteId, list => list.length));
+      setEpisodeSourcesById(
+        groupBy(
+          episodeSourceList.map(episodeSource => EpisodeSource.fromMap(episodeSource)),
+          episodeSource => episodeSource.favoriteId!
+        )
+      );
+      setLoading(false);
+    };
+
+    init();
   }, []);
-
-  /**
-   * 加载资源
-   */
-  const loadFavorite = async () => {
-    setLoading(true);
-    const favoriteList = await favoriteProvider.read();
-    const episodeList = await episodeProvider.read();
-    const episodeSourceList = await episodeSourceProvider.read();
-    setById({
-      ...favoriteList.reduce((byId, favorite) => {
-        byId[favorite[FAVORITE_CONSTANTS.IDENTIFIER]] = Favorite.fromMap(favorite);
-        return byId;
-      }, {}),
-    });
-    setList(favoriteList.map(favorite => favorite[FAVORITE_CONSTANTS.IDENTIFIER]));
-    const groupByFavoriteId = groupBy(
-      episodeList.map(episode => Episode.fromMap(episode)),
-      episode => episode.favoriteId!
-    );
-    setEpisodesById(groupByFavoriteId);
-    setEpisodeCountById(map(groupByFavoriteId, list => list.length));
-    setEpisodeSourcesById(
-      groupBy(
-        episodeSourceList.map(episodeSource => EpisodeSource.fromMap(episodeSource)),
-        episodeSource => episodeSource.favoriteId!
-      )
-    );
-    setLoading(false);
-  };
-
-  /**
-   * 更新全部收藏
-   */
-  const upgradeFavorites = async () => {
-    setUpgrading(true);
-    setEpisodesById({});
-    setEpisodeSourcesById({});
-    tempEpisodesById = {};
-    tempEpisodeSourcesById = {};
-    tempById = byId;
-    tempEpisodeCountById = episodeCountById;
-    list.forEach(id => upgradeFavorite(byId[id]));
-    setUpgrading(false);
-  };
 
   /**
    * 更新收藏
@@ -143,25 +124,37 @@ export default function FavoritesPage() {
     }
   };
 
+  const onFavoriteRefresh = () => {
+    setUpgrading(true);
+    setEpisodesById({});
+    setEpisodeSourcesById({});
+    tempEpisodesById = {};
+    tempEpisodeSourcesById = {};
+    tempById = byId;
+    tempEpisodeCountById = episodeCountById;
+    list.forEach(id => upgradeFavorite(byId[id]));
+    setUpgrading(false);
+  };
+
+  const onFavoritePress = (id: number) => {
+    if (episodesById[id] && episodeSourcesById[id]) {
+      setFavorite(byId[id]);
+      setVideoInfo(byId[id]);
+      setHistoryStatus(byId[id]);
+      setEpisodes(episodesById[id]);
+      setEpisodeSources(episodeSourcesById[id]);
+      navigation.navigate('PlayerPage');
+    }
+  };
+
   return (
     <WithLoading loading={loading}>
-      <ScrollView refreshControl={<RefreshControl refreshing={upgrading} onRefresh={upgradeFavorites} />}>
+      <ScrollView refreshControl={<RefreshControl refreshing={upgrading} onRefresh={onFavoriteRefresh} />}>
         {list.length > 0 &&
           list.map(
             id =>
               byId[id] && (
-                <PressableCard
-                  key={id}
-                  onPress={() => {
-                    if (episodesById[id] && episodeSourcesById[id]) {
-                      setFavorite(byId[id]);
-                      setVideoInfo(byId[id]);
-                      setHistoryStatus(byId[id]);
-                      setEpisodes(episodesById[id]);
-                      setEpisodeSources(episodeSourcesById[id]);
-                      navigation.navigate('PlayerPage');
-                    }
-                  }}>
+                <PressableCard key={id} onPress={() => onFavoritePress(id)}>
                   <>
                     <VideoInfo {...byId[id]} />
                     {episodesById[id] && episodeSourcesById[id] ? (

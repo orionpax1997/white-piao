@@ -17,29 +17,33 @@ export default function SourcesPage() {
   const toast = useToast();
 
   useEffect(() => {
-    if (list.length === 0) {
-      loadResource();
-    }
+    const init = async () => {
+      setLoading(true);
+      const rows = await sourceProvider.read();
+      // 资源为空时，自动同步一下
+      if (rows.length === 0) {
+        setNeedReSync(true);
+        toast.show({ description: '资源为空, 正在自动初始化...' });
+      }
+
+      setById({
+        ...rows.reduce((byId, item) => {
+          byId[item[SOURCE_CONSTANTS.IDENTIFIER]] = Source.fromMap(item);
+          return byId;
+        }, {}),
+      });
+      setList(rows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
+      setLoading(false);
+    };
+
+    init();
   }, []);
 
-  /**
-   * 加载资源
-   */
-  const loadResource = async () => {
-    setLoading(true);
-    const rows = await sourceProvider.read();
-    if (rows.length === 0) {
-      setNeedReSync(true);
-      toast.show({ description: '资源为空, 正在自动初始化...' });
-    }
-    setById({
-      ...rows.reduce((byId, item) => {
-        byId[item[SOURCE_CONSTANTS.IDENTIFIER]] = Source.fromMap(item);
-        return byId;
-      }, {}),
-    });
-    setList(rows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
-    setLoading(false);
+  const onSourceToggle = (id: number, checked: boolean) => {
+    const source = byId[id];
+    source.isEnabled = checked ? 1 : 0;
+    sourceProvider.update(source);
+    setById({ ...byId, [id]: source });
   };
 
   return (
@@ -48,18 +52,7 @@ export default function SourcesPage() {
         {list.length > 0 &&
           list.map(
             id =>
-              byId[id] && (
-                <SourceItem
-                  key={id}
-                  source={byId[id]}
-                  onToggle={checked => {
-                    const source = byId[id];
-                    source.isEnabled = checked ? 1 : 0;
-                    sourceProvider.update(source);
-                    setById({ ...byId, [id]: source });
-                  }}
-                />
-              )
+              byId[id] && <SourceItem key={id} source={byId[id]} onToggle={checked => onSourceToggle(id, checked)} />
           )}
       </ScrollView>
     </WithLoading>
@@ -82,13 +75,11 @@ const SourceItem = ({ source, onToggle }: { source: Source; onToggle: (checked: 
         </Badge>
         <Switch size="sm" isChecked={isEnabled === 1} onToggle={onToggle} />
         <Menu
-          trigger={triggerProps => {
-            return (
-              <Pressable {...triggerProps}>
-                <Icon as={<Feather name="more-vertical" />} />
-              </Pressable>
-            );
-          }}>
+          trigger={triggerProps => (
+            <Pressable {...triggerProps}>
+              <Icon as={<Feather name="more-vertical" />} />
+            </Pressable>
+          )}>
           <Menu.Item onPress={() => openBrowserAsync(baseURL)}>浏览器打开</Menu.Item>
         </Menu>
       </Row>

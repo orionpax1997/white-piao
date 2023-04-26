@@ -27,7 +27,7 @@ import {
 } from 'native-base';
 import { useEffect, useState, useRef } from 'react';
 import { Dimensions } from 'react-native';
-import GoogleCast, { CastButton, CastState, useCastState, useRemoteMediaClient } from 'react-native-google-cast';
+import { CastState, useCastState, CastButton, useRemoteMediaClient } from 'react-native-google-cast';
 
 import { VideoInfo } from '../components';
 import { EPISODE_CONSTANTS, EPISODE_SOURCE_CONSTANTS } from '../constants';
@@ -40,6 +40,8 @@ const episodeProvider = EpisodeProvider.getProvider();
 const episodeSourceProvider = EpisodeSourceProvider.getProvider();
 
 export default function PlayerPage() {
+  const [favoriting, setFavoriting] = useState(false);
+  const [inFullscreen, setInFullsreen] = useState(false);
   const {
     streamUrl,
     videoInfo,
@@ -66,35 +68,57 @@ export default function PlayerPage() {
     setEpisodeCountById,
   } = useFavorite();
   const { byId } = useSource();
-  const [inFullscreen, setInFullsreen] = useState(false);
-  const client = useRemoteMediaClient();
-  const castState = useCastState();
-  const refVideo = useRef<any>(null);
-  const navigation = useNavigation<any>();
   const toast = useToast();
-  const [favoriting, setFavoriting] = useState(false);
+  const castState = useCastState();
+  const client = useRemoteMediaClient();
 
   const source = byId[videoInfo.sourceId];
 
   useEffect(() => {
+    const init = async () => {
+      setStreamUrl(null);
+      // 设置状态栏
+      setStatusBarStyle('light');
+      setStatusBarBackgroundColor('black', false);
+      // 获取播放页地址
+      const playPageUrl = favorite != null ? episodes[historyStatus.currEpisode].playPageUrl : await loadEpisodes();
+      // 加载视频流
+      if (playPageUrl) {
+        loadStreamUrl(playPageUrl);
+      }
+    };
+
     init();
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', async () => {
-      if (inFullscreen) {
-        await setStatusBarHidden(false, 'none');
-        setInFullsreen(!inFullscreen);
-        lockAsync(OrientationLock.DEFAULT);
-      }
-      setStatusBarStyle('dark');
-      setStatusBarBackgroundColor('#0891b2', false);
-      await updateFavoriteHistoryStatus(historyStatus);
-    });
+    return () => {
+      (async () => {
+        // 退出全屏
+        if (inFullscreen) {
+          await setStatusBarHidden(false, 'none');
+          setInFullsreen(!inFullscreen);
+          lockAsync(OrientationLock.DEFAULT);
+        }
+        // 设置状态栏
+        setStatusBarStyle('dark');
+        setStatusBarBackgroundColor('#0891b2', false);
+        // 修改历史状态记录
+        await updateFavoriteHistoryStatus(historyStatus);
+      })();
+    };
+  }, [historyStatus, inFullscreen, favorite]);
 
-    return unsubscribe;
-  }, [favorite, historyStatus, inFullscreen]);
+  // 设置屏幕常亮
+  useEffect(() => {
+    activateKeepAwake();
 
+    return () => {
+      deactivateKeepAwake();
+    };
+  }, []);
+
+  // 设置投屏
   useEffect(() => {
     if (client && castState === CastState.CONNECTED && streamUrl) {
       client
@@ -108,32 +132,6 @@ export default function PlayerPage() {
         .catch(err => toast.show({ description: err }));
     }
   }, [client, castState, streamUrl]);
-
-  useEffect(() => {
-    activateKeepAwake();
-
-    return () => {
-      deactivateKeepAwake();
-    };
-  }, []);
-
-  /**
-   * 初始化
-   */
-  const init = async () => {
-    setStreamUrl(null);
-    let playPageUrl;
-    setStatusBarStyle('light');
-    setStatusBarBackgroundColor('black', false);
-    if (favorite != null) {
-      playPageUrl = episodes[historyStatus.currEpisode].playPageUrl;
-    } else {
-      playPageUrl = await loadEpisodes();
-    }
-    if (playPageUrl !== '') {
-      loadStreamUrl(playPageUrl);
-    }
-  };
 
   /**
    * 加载目录
@@ -188,11 +186,11 @@ export default function PlayerPage() {
   /**
    * 换集
    */
-  const onEpisodeChange = async (index: number) => {
+  const onEpisodeChange = (index: number) => {
     setStreamUrl(null);
     setHistoryStatus({ ...historyStatus, currEpisode: index });
-    loadStreamUrl(episodes[index].playPageUrl);
     updateFavoriteHistoryStatus({ ...historyStatus, currEpisode: index });
+    loadStreamUrl(episodes[index].playPageUrl);
   };
 
   /**
@@ -210,23 +208,25 @@ export default function PlayerPage() {
         episodeUpdateFlag: 0,
       })
     );
+
     setFavorite(favorite);
     setFavoriteList([...favoriteList, favorite.id!]);
     setFavoriteById({ ...favoriteById, [favorite.id!]: favorite });
     setEpisodeSourcesById({ ...episodeSourcesById, [favorite.id!]: episodeSources });
     setEpisodesById({ ...episodesById, [favorite.id!]: episodes });
     setEpisodeCountById({ ...episodeCountById, [favorite.id!]: episodes.length });
+    setFavoriting(false);
+
     episodeSources.forEach(source =>
       episodeSourceProvider.create(EpisodeSource.fromMap({ ...source, favoriteId: favorite.id }))
     );
     episodes.forEach(episode => episodeProvider.create(Episode.fromMap({ ...episode, favoriteId: favorite.id })));
-    setFavoriting(false);
   };
 
   /**
    * 取消收藏
    */
-  const onCancelFavorite = async () => {
+  const onCancelFavorite = () => {
     if (favorite) {
       setFavoriting(true);
       const id = favorite.id;
@@ -235,17 +235,29 @@ export default function PlayerPage() {
       setFavoriteList([...favoriteList]);
       delete favoriteById[favorite.id!];
       setFavoriteById({ ...favoriteById });
+      setFavoriting(false);
+
       favoriteProvider.deleteById(id!);
       episodeProvider.delete(`${EPISODE_CONSTANTS.FIELDS.FAVORITE_ID} = ?`, [id!]);
       episodeSourceProvider.delete(`${EPISODE_SOURCE_CONSTANTS.FIELDS.FAVORITE_ID} = ?`, [id!]);
-      setFavoriting(false);
     }
+  };
+
+  /**
+   * 换源
+   */
+  const onEpisodeSourceChange = async (index: number) => {
+    setStreamUrl(null);
+    setEpisodes([]);
+    setHistoryStatus({ ...historyStatus, currEpisodeSource: index });
+    const playPageUrl = await loadEpisodes(index);
+    loadStreamUrl(playPageUrl);
   };
 
   /**
    * 修改历史记录状态
    */
-  const updateFavoriteHistoryStatus = async (hs: HistoryStatus) => {
+  const updateFavoriteHistoryStatus = (hs: HistoryStatus) => {
     if (favorite) {
       const f = Favorite.fromMap({
         ...favorite.toMap(),
@@ -253,8 +265,8 @@ export default function PlayerPage() {
         episodeUpdateFlag: 0,
         lastWatchTime: new Date().toISOString(),
       });
-      await favoriteProvider.update(f);
       setFavoriteById({ ...favoriteById, [f.id!]: f });
+      favoriteProvider.update(f);
     }
   };
 
@@ -263,98 +275,19 @@ export default function PlayerPage() {
       {streamUrl ? (
         <Box safeAreaTop>
           {castState !== CastState.CONNECTED && (
-            <ZStack>
-              <VideoPlayer
-                fullscreen={{
-                  enterFullscreen: async () => {
-                    await setStatusBarHidden(true, 'none');
-                    setInFullsreen(!inFullscreen);
-                    lockAsync(OrientationLock.LANDSCAPE_RIGHT);
-                  },
-                  exitFullscreen: async () => {
-                    await setStatusBarHidden(false, 'none');
-                    setInFullsreen(!inFullscreen);
-                    lockAsync(OrientationLock.DEFAULT);
-                  },
-                  inFullscreen,
-                }}
-                videoProps={{
-                  shouldPlay: true,
-                  ref: refVideo,
-                  resizeMode: ResizeMode.CONTAIN,
-                  source: {
-                    uri: streamUrl,
-                    overrideFileExtensionAndroid: 'm3u8',
-                  },
-                }}
-                style={{
-                  height: inFullscreen ? Dimensions.get('window').width : 200,
-                  width: inFullscreen ? Dimensions.get('window').height : Dimensions.get('window').width,
-                }}
-              />
-              {!inFullscreen && (
-                <IconButton
-                  borderRadius="full"
-                  className="text-xl"
-                  icon={<Icon className="text-white" as={<Ionicons name="chevron-back" />} />}
-                  onPress={() => {
-                    navigation.goBack();
-                  }}
-                />
-              )}
-            </ZStack>
+            <Video inFullscreen={inFullscreen} streamUrl={streamUrl} setInFullsreen={setInFullsreen} />
           )}
-          <Row>
-            {castState === CastState.CONNECTED && (
-              <IconButton
-                className="text-xl"
-                borderRadius="full"
-                icon={<Icon className="text-pink-800" as={<Ionicons name="chevron-back" />} />}
-                onPress={() => navigation.goBack()}
-              />
-            )}
-            {favoriting ? (
-              <Spinner color="pink.800" className="w-10" />
-            ) : favorite == null ? (
-              <IconButton
-                className="text-xl"
-                borderRadius="full"
-                icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite-outline" />} />}
-                onPress={onFavorite}
-              />
-            ) : (
-              <IconButton
-                className="text-xl"
-                borderRadius="full"
-                icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite" />} />}
-                onPress={onCancelFavorite}
-              />
-            )}
-            <IconButton
-              className="text-xl"
-              borderRadius="full"
-              icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
-              onPress={() => openBrowserAsync(episodes[historyStatus.currEpisode].playPageUrl)}
-            />
-            <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginTop: 8, marginLeft: 8 }} />
-            <Spacer />
-            {historyStatus.currEpisode > 0 && (
-              <IconButton
-                className="text-xl"
-                borderRadius="full"
-                icon={<Icon className="text-pink-800" as={<MaterialIcons name="skip-previous" />} />}
-                onPress={() => onEpisodeChange(historyStatus.currEpisode - 1)}
-              />
-            )}
-            {historyStatus.currEpisode < episodes.length - 1 && (
-              <IconButton
-                className="text-xl"
-                borderRadius="full"
-                icon={<Icon className="text-pink-800" as={<MaterialIcons name="skip-next" />} />}
-                onPress={() => onEpisodeChange(historyStatus.currEpisode + 1)}
-              />
-            )}
-          </Row>
+          <VideoBar
+            castState={castState}
+            favoriting={favoriting}
+            favorited={favorite !== null}
+            currEpisode={historyStatus.currEpisode}
+            playPageUrl={episodes[historyStatus.currEpisode].playPageUrl}
+            episodesLength={episodes.length}
+            onFavorite={onFavorite}
+            onCancelFavorite={onCancelFavorite}
+            onEpisodeChange={onEpisodeChange}
+          />
         </Box>
       ) : (
         <Box safeAreaTop>
@@ -376,50 +309,18 @@ export default function PlayerPage() {
           <>
             <Row className="mt-2 px-2">
               <Spacer />
-              <Menu
-                trigger={triggerProps => {
-                  return (
-                    <Pressable {...triggerProps} className="flex-row items-center">
-                      <Text noOfLines={1} className="text-gray-800 text-sm font-medium mr-2">
-                        {episodeSources[historyStatus.currEpisodeSource].title}
-                      </Text>
-                      <Icon as={<MaterialIcons name="expand-more" />} />
-                    </Pressable>
-                  );
-                }}>
-                {episodeSources.map((source, index) => (
-                  <Menu.Item
-                    key={index}
-                    onPress={async () => {
-                      setStreamUrl(null);
-                      setEpisodes([]);
-                      setHistoryStatus({ ...historyStatus, currEpisodeSource: index });
-                      const playPageUrl = await loadEpisodes(index);
-                      loadStreamUrl(playPageUrl);
-                    }}>
-                    {source.title}
-                  </Menu.Item>
-                ))}
-              </Menu>
+              <SourceMenu
+                episodeSources={episodeSources}
+                currEpisodeSource={historyStatus.currEpisodeSource}
+                onEpisodeSourceChange={onEpisodeSourceChange}
+              />
             </Row>
             <ScrollView>
-              <View className="flex flex-wrap flex-row">
-                {episodes.map((episode, index) => (
-                  <Center key={index} className="basis-1/3">
-                    <Button
-                      size="sm"
-                      variant={index === historyStatus.currEpisode ? 'solid' : 'outline'}
-                      className="w-5/6 mt-2"
-                      onPress={() => onEpisodeChange(index)}>
-                      <Text
-                        noOfLines={1}
-                        className={index === historyStatus.currEpisode ? 'text-white' : 'text-cyan-600'}>
-                        {episode.title}
-                      </Text>
-                    </Button>
-                  </Center>
-                ))}
-              </View>
+              <EpisodeList
+                episodes={episodes}
+                currEpisode={historyStatus.currEpisode}
+                onEpisodeChange={onEpisodeChange}
+              />
             </ScrollView>
           </>
         ) : (
@@ -435,3 +336,194 @@ export default function PlayerPage() {
     </>
   );
 }
+
+const Video = ({
+  inFullscreen,
+  streamUrl,
+  setInFullsreen,
+}: {
+  inFullscreen: boolean;
+  streamUrl: string;
+  setInFullsreen: (inFullscreen: boolean) => void;
+}) => {
+  const refVideo = useRef<any>(null);
+  const navigation = useNavigation<any>();
+
+  const fullscreen = {
+    enterFullscreen: async () => {
+      await setStatusBarHidden(true, 'none');
+      setInFullsreen(!inFullscreen);
+      lockAsync(OrientationLock.LANDSCAPE_RIGHT);
+    },
+    exitFullscreen: async () => {
+      await setStatusBarHidden(false, 'none');
+      setInFullsreen(!inFullscreen);
+      lockAsync(OrientationLock.DEFAULT);
+    },
+    inFullscreen,
+  };
+  const videoProps = {
+    shouldPlay: true,
+    ref: refVideo,
+    resizeMode: ResizeMode.CONTAIN,
+    source: {
+      uri: streamUrl,
+      overrideFileExtensionAndroid: 'm3u8',
+    },
+  };
+
+  return (
+    <ZStack>
+      <VideoPlayer
+        fullscreen={fullscreen}
+        videoProps={videoProps}
+        style={{
+          height: inFullscreen ? Dimensions.get('window').width : 200,
+          width: inFullscreen ? Dimensions.get('window').height : Dimensions.get('window').width,
+        }}
+      />
+      {!inFullscreen && (
+        <IconButton
+          borderRadius="full"
+          className="text-xl"
+          icon={<Icon className="text-white" as={<Ionicons name="chevron-back" />} />}
+          onPress={() => navigation.goBack()}
+        />
+      )}
+    </ZStack>
+  );
+};
+
+const VideoBar = ({
+  castState,
+  favoriting,
+  favorited,
+  currEpisode,
+  playPageUrl,
+  episodesLength,
+  onFavorite,
+  onCancelFavorite,
+  onEpisodeChange,
+}: {
+  castState: CastState | null | undefined;
+  favoriting: boolean;
+  favorited: boolean;
+  currEpisode: number;
+  playPageUrl: string;
+  episodesLength: number;
+  onFavorite: () => void;
+  onCancelFavorite: () => void;
+  onEpisodeChange: (index: number) => void;
+}) => {
+  const navigation = useNavigation<any>();
+
+  return (
+    <Row>
+      {castState === CastState.CONNECTED && (
+        <IconButton
+          className="text-xl"
+          borderRadius="full"
+          icon={<Icon className="text-pink-800" as={<Ionicons name="chevron-back" />} />}
+          onPress={() => navigation.goBack()}
+        />
+      )}
+      {favoriting ? (
+        <Spinner color="pink.800" className="w-10" />
+      ) : favorited ? (
+        <IconButton
+          className="text-xl"
+          borderRadius="full"
+          icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite-outline" />} />}
+          onPress={onFavorite}
+        />
+      ) : (
+        <IconButton
+          className="text-xl"
+          borderRadius="full"
+          icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite" />} />}
+          onPress={onCancelFavorite}
+        />
+      )}
+      <IconButton
+        className="text-xl"
+        borderRadius="full"
+        icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
+        onPress={() => openBrowserAsync(playPageUrl)}
+      />
+      <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginTop: 8, marginLeft: 8 }} />
+      <Spacer />
+      {currEpisode > 0 && (
+        <IconButton
+          className="text-xl"
+          borderRadius="full"
+          icon={<Icon className="text-pink-800" as={<MaterialIcons name="skip-previous" />} />}
+          onPress={() => onEpisodeChange(currEpisode - 1)}
+        />
+      )}
+      {currEpisode < episodesLength - 1 && (
+        <IconButton
+          className="text-xl"
+          borderRadius="full"
+          icon={<Icon className="text-pink-800" as={<MaterialIcons name="skip-next" />} />}
+          onPress={() => onEpisodeChange(currEpisode + 1)}
+        />
+      )}
+    </Row>
+  );
+};
+
+const SourceMenu = ({
+  episodeSources,
+  currEpisodeSource,
+  onEpisodeSourceChange,
+}: {
+  episodeSources: EpisodeSource[];
+  currEpisodeSource: number;
+  onEpisodeSourceChange: (index: number) => void;
+}) => {
+  return (
+    <Menu
+      trigger={triggerProps => (
+        <Pressable {...triggerProps} className="flex-row items-center">
+          <Text noOfLines={1} className="text-gray-800 text-sm font-medium mr-2">
+            {episodeSources[currEpisodeSource].title}
+          </Text>
+          <Icon as={<MaterialIcons name="expand-more" />} />
+        </Pressable>
+      )}>
+      {episodeSources.map((source, index) => (
+        <Menu.Item key={index} onPress={() => onEpisodeSourceChange(index)}>
+          {source.title}
+        </Menu.Item>
+      ))}
+    </Menu>
+  );
+};
+
+const EpisodeList = ({
+  episodes,
+  currEpisode,
+  onEpisodeChange,
+}: {
+  episodes: Episode[];
+  currEpisode: number;
+  onEpisodeChange: (index: number) => void;
+}) => {
+  return (
+    <View className="flex flex-wrap flex-row">
+      {episodes.map((episode, index) => (
+        <Center key={index} className="basis-1/3">
+          <Button
+            size="sm"
+            variant={index === currEpisode ? 'solid' : 'outline'}
+            className="w-5/6 mt-2"
+            onPress={() => onEpisodeChange(index)}>
+            <Text noOfLines={1} className={index === currEpisode ? 'text-white' : 'text-cyan-600'}>
+              {episode.title}
+            </Text>
+          </Button>
+        </Center>
+      ))}
+    </View>
+  );
+};
