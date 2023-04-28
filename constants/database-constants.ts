@@ -1,5 +1,5 @@
 /** 数据库版本 */
-export const DATABASE_VERSION = 1;
+export const DATABASE_VERSION = 2;
 /** 是否重建数据库 */
 export const REBUILD_DATABASE = false;
 

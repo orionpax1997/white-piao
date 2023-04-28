@@ -5,12 +5,12 @@ import { Favorite, Episode, EpisodeSource } from '../modals';
 interface FavoriteState {
   list: number[];
   byId: { [id: number]: Favorite };
-  episodesById: { [id: number]: Episode[] };
+  episodesById: { [id: number]: { [id: number]: Episode[] } };
   episodeSourcesById: { [id: number]: EpisodeSource[] };
   episodeCountById: { [id: number]: number };
   setList: (v: number[]) => void;
   setById: (v: { [id: number]: Favorite }) => void;
-  setEpisodesById: (v: { [id: number]: Episode[] }) => void;
+  setEpisodesById: (v: { [id: number]: { [id: number]: Episode[] } }) => void;
   setEpisodeSourcesById: (v: { [id: number]: EpisodeSource[] }) => void;
   setEpisodeCountById: (v: { [id: number]: number }) => void;
 }

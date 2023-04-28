@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import groupBy from 'just-group-by';
-import map from 'just-map-values';
+import map from 'just-map-object';
 import { ScrollView, useToast, Badge, Spinner } from 'native-base';
 import { useEffect, useState } from 'react';
 import { RefreshControl } from 'react-native';
@@ -32,14 +32,9 @@ export default function FavoritesPage() {
     setEpisodeCountById,
   } = useFavorite();
   const { byId: sourceById } = useSource();
-  const { setVideoInfo, setHistoryStatus, setFavorite, setEpisodes, setEpisodeSources } = usePlayer();
+  const { setVideoInfo, setHistoryStatus, setFavorite, setEpisodeSources, setEpisodesBySourceIndex } = usePlayer();
   const toast = useToast();
   const navigation = useNavigation<any>();
-
-  let tempById: { [id: number]: Favorite } = {};
-  let tempEpisodesById: { [id: number]: Episode[] } = {};
-  let tempEpisodeSourcesById: { [id: number]: EpisodeSource[] } = {};
-  let tempEpisodeCountById: { [id: number]: number } = {};
 
   useEffect(() => {
     const init = async () => {
@@ -47,25 +42,29 @@ export default function FavoritesPage() {
       const favoriteList = await favoriteProvider.read();
       const episodeList = await episodeProvider.read();
       const episodeSourceList = await episodeSourceProvider.read();
-      setById({
+      const tempById = {
         ...favoriteList.reduce((byId, favorite) => {
           byId[favorite[FAVORITE_CONSTANTS.IDENTIFIER]] = Favorite.fromMap(favorite);
           return byId;
         }, {}),
-      });
+      };
+      setById(tempById);
       setList(favoriteList.map(favorite => favorite[FAVORITE_CONSTANTS.IDENTIFIER]));
-      const groupByFavoriteId = groupBy(
-        episodeList.map(episode => Episode.fromMap(episode)),
-        episode => episode.favoriteId!
-      );
-      setEpisodesById(groupByFavoriteId);
-      setEpisodeCountById(map(groupByFavoriteId, list => list.length));
       setEpisodeSourcesById(
         groupBy(
           episodeSourceList.map(episodeSource => EpisodeSource.fromMap(episodeSource)),
           episodeSource => episodeSource.favoriteId!
         )
       );
+      const episodesGroup = map(
+        groupBy(
+          episodeList.map(episode => Episode.fromMap(episode)),
+          episode => episode.favoriteId!
+        ),
+        (_, list) => groupBy(list, episode => episode.sourceIndex)
+      );
+      setEpisodesById(episodesGroup);
+      setEpisodeCountById(map(episodesGroup, (key, value) => value[tempById[key].currEpisodeSource].length));
       setLoading(false);
     };
 
@@ -86,39 +85,51 @@ export default function FavoritesPage() {
         },
         { timeout: 10000 }
       );
-      tempEpisodeSourcesById = {
-        ...tempEpisodeSourcesById,
+
+      // 更新来源状态
+      const tempEpisodeSourcesById: { [id: number]: EpisodeSource[] } = {
+        ...episodeSourcesById,
         [favorite.id!]: res.data.data.map((item: any, index: number) => {
-          return { title: item.title, index };
+          return EpisodeSource.fromMap({ title: item.title, index, favoriteId: favorite.id });
         }),
       };
       setEpisodeSourcesById(tempEpisodeSourcesById);
-      const episodeList = res.data.data[favorite.currEpisodeSource].episodeList;
-      tempEpisodesById = {
-        ...tempEpisodesById,
-        [favorite.id!]: episodeList.map((item: any, index: number) => {
-          return { ...item, index };
-        }),
+
+      // 更新剧集状态
+      const episodeList: Episode[] = res.data.data.reduce((list: any[], cur: any, sourceIndex: number) => {
+        list = [
+          ...list,
+          ...cur.episodeList.map((item: any, index: number) => {
+            return Episode.fromMap({ ...item, index, favoriteId: favorite.id, sourceIndex });
+          }),
+        ];
+        return list;
+      }, []);
+      const tempEpisodesById = {
+        ...episodesById,
+        [favorite.id!]: groupBy(episodeList, episode => episode.sourceIndex),
       };
       setEpisodesById(tempEpisodesById);
+
+      // 更新收藏项状态
       const upgrade = Favorite.fromMap({
         ...favorite.toMap(),
         episodeUpdateTime: new Date().toISOString(),
-        episodeUpdateFlag: tempEpisodesById[favorite.id!].length > episodeCountById[favorite.id!] ? 1 : 0,
+        episodeUpdateFlag:
+          tempEpisodesById[favorite.id!][favorite.currEpisodeSource].length > episodeCountById[favorite.id!] ? 1 : 0,
       });
-      tempById = { ...tempById, [favorite.id!]: upgrade };
-      setById(tempById);
-      tempEpisodeCountById = { ...tempEpisodeCountById, [favorite.id!]: tempEpisodesById[favorite.id!].length };
-      setEpisodeCountById(tempEpisodeCountById);
-      await favoriteProvider.update(upgrade);
-      await episodeProvider.delete(`${EPISODE_CONSTANTS.FIELDS.FAVORITE_ID} = ?`, [favorite.id!]);
+      setById({ ...byId, [favorite.id!]: upgrade });
+      setEpisodeCountById({
+        ...episodeCountById,
+        [favorite.id!]: tempEpisodesById[favorite.id!][favorite.currEpisodeSource].length,
+      });
+
+      // 数据持久化
+      favoriteProvider.update(upgrade);
       await episodeSourceProvider.delete(`${EPISODE_SOURCE_CONSTANTS.FIELDS.FAVORITE_ID} = ?`, [favorite.id!]);
-      tempEpisodeSourcesById[favorite.id!].forEach(source =>
-        episodeSourceProvider.create(EpisodeSource.fromMap({ ...source, favoriteId: favorite.id }))
-      );
-      tempEpisodesById[favorite.id!].forEach(episode =>
-        episodeProvider.create(Episode.fromMap({ ...episode, favoriteId: favorite.id }))
-      );
+      tempEpisodeSourcesById[favorite.id!].forEach(source => episodeSourceProvider.create(source));
+      await episodeProvider.delete(`${EPISODE_CONSTANTS.FIELDS.FAVORITE_ID} = ?`, [favorite.id!]);
+      episodeList.forEach(episode => episodeProvider.create(episode));
     } catch {
       toast.show({ description: `${favorite.title} 更新失败` });
     }
@@ -128,10 +139,6 @@ export default function FavoritesPage() {
     setUpgrading(true);
     setEpisodesById({});
     setEpisodeSourcesById({});
-    tempEpisodesById = {};
-    tempEpisodeSourcesById = {};
-    tempById = byId;
-    tempEpisodeCountById = episodeCountById;
     list.forEach(id => upgradeFavorite(byId[id]));
     setUpgrading(false);
   };
@@ -141,7 +148,7 @@ export default function FavoritesPage() {
       setFavorite(byId[id]);
       setVideoInfo(byId[id]);
       setHistoryStatus(byId[id]);
-      setEpisodes(episodesById[id]);
+      setEpisodesBySourceIndex(episodesById[id]);
       setEpisodeSources(episodeSourcesById[id]);
       navigation.navigate('PlayerPage');
     }

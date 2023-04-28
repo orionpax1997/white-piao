@@ -7,6 +7,8 @@ import { lockAsync, OrientationLock } from 'expo-screen-orientation';
 import { setStatusBarHidden, setStatusBarStyle, setStatusBarBackgroundColor } from 'expo-status-bar';
 import VideoPlayer from 'expo-video-player';
 import { openBrowserAsync } from 'expo-web-browser';
+import groupBy from 'just-group-by';
+import values from 'just-values';
 import {
   Row,
   Skeleton,
@@ -48,12 +50,12 @@ export default function PlayerPage() {
     historyStatus,
     favorite,
     episodeSources,
-    episodes,
+    episodesBySourceIndex,
     setStreamUrl,
-    setEpisodes,
     setEpisodeSources,
     setHistoryStatus,
     setFavorite,
+    setEpisodesBySourceIndex,
   } = usePlayer();
   const {
     list: favoriteList,
@@ -69,9 +71,11 @@ export default function PlayerPage() {
   } = useFavorite();
   const { byId } = useSource();
   const toast = useToast();
-  const castState = useCastState();
-  const client = useRemoteMediaClient();
+  // const castState = useCastState();
+  const castState = null;
+  // const client = useRemoteMediaClient();
 
+  const episodes = episodesBySourceIndex[historyStatus.currEpisodeSource] ?? [];
   const source = byId[videoInfo.sourceId];
 
   useEffect(() => {
@@ -81,7 +85,7 @@ export default function PlayerPage() {
       setStatusBarStyle('light');
       setStatusBarBackgroundColor('black', false);
       // 获取播放页地址
-      const playPageUrl = favorite != null ? episodes[historyStatus.currEpisode].playPageUrl : await loadEpisodes();
+      const playPageUrl = favorite != null ? episodes[favorite.currEpisode].playPageUrl : await loadEpisodes();
       // 加载视频流
       if (playPageUrl) {
         loadStreamUrl(playPageUrl);
@@ -119,25 +123,25 @@ export default function PlayerPage() {
   }, []);
 
   // 设置投屏
-  useEffect(() => {
-    if (client && castState === CastState.CONNECTED && streamUrl) {
-      client
-        .loadMedia({
-          autoplay: true,
-          mediaInfo: {
-            contentUrl: streamUrl,
-            contentType: 'application/x-mpegURL',
-          },
-        })
-        .catch(err => toast.show({ description: err }));
-    }
-  }, [client, castState, streamUrl]);
+  // useEffect(() => {
+  //   if (client && castState === CastState.CONNECTED && streamUrl) {
+  //     client
+  //       .loadMedia({
+  //         autoplay: true,
+  //         mediaInfo: {
+  //           contentUrl: streamUrl,
+  //           contentType: 'application/x-mpegURL',
+  //         },
+  //       })
+  //       .catch(err => toast.show({ description: err }));
+  //   }
+  // }, [client, castState, streamUrl]);
 
   /**
    * 加载目录
    * @returns 播放页地址
    */
-  const loadEpisodes = async (index?: number): Promise<string> => {
+  const loadEpisodes = async (): Promise<string> => {
     try {
       const res = await axios.post(
         `${source.resourceServerUrl}/api/run/findSeries`,
@@ -147,17 +151,25 @@ export default function PlayerPage() {
         },
         { timeout: 10000 }
       );
+
       setEpisodeSources(
         res.data.data.map((item: any, index: number) => {
           return { title: item.title, index };
         })
       );
-      const episodeList = res.data.data[index ?? historyStatus.currEpisodeSource].episodeList;
-      setEpisodes(
-        episodeList.map((item: any, index: number) => {
-          return { ...item, index };
-        })
-      );
+
+      const episodeList: Episode[] = res.data.data.reduce((list: any[], cur: any, sourceIndex: number) => {
+        list = [
+          ...list,
+          ...cur.episodeList.map((item: any, index: number) => {
+            return Episode.fromMap({ ...item, index, sourceIndex });
+          }),
+        ];
+        return list;
+      }, []);
+      setEpisodesBySourceIndex(groupBy(episodeList, episode => episode.sourceIndex));
+
+      // 获取当前播放页地址
       const currEpisode =
         historyStatus.currEpisode <= episodeList.length ? historyStatus.currEpisode : episodeList.length;
       return episodeList[currEpisode].playPageUrl;
@@ -213,14 +225,16 @@ export default function PlayerPage() {
     setFavoriteList([...favoriteList, favorite.id!]);
     setFavoriteById({ ...favoriteById, [favorite.id!]: favorite });
     setEpisodeSourcesById({ ...episodeSourcesById, [favorite.id!]: episodeSources });
-    setEpisodesById({ ...episodesById, [favorite.id!]: episodes });
+    setEpisodesById({ ...episodesById, [favorite.id!]: episodesBySourceIndex });
     setEpisodeCountById({ ...episodeCountById, [favorite.id!]: episodes.length });
     setFavoriting(false);
 
     episodeSources.forEach(source =>
       episodeSourceProvider.create(EpisodeSource.fromMap({ ...source, favoriteId: favorite.id }))
     );
-    episodes.forEach(episode => episodeProvider.create(Episode.fromMap({ ...episode, favoriteId: favorite.id })));
+    values(episodesBySourceIndex).forEach(episodes =>
+      episodes.forEach(episode => episodeProvider.create(Episode.fromMap({ ...episode, favoriteId: favorite.id })))
+    );
   };
 
   /**
@@ -248,10 +262,11 @@ export default function PlayerPage() {
    */
   const onEpisodeSourceChange = async (index: number) => {
     setStreamUrl(null);
-    setEpisodes([]);
     setHistoryStatus({ ...historyStatus, currEpisodeSource: index });
-    const playPageUrl = await loadEpisodes(index);
-    loadStreamUrl(playPageUrl);
+    const episodeList = episodesBySourceIndex[index];
+    const currEpisode =
+      historyStatus.currEpisode <= episodeList.length ? historyStatus.currEpisode : episodeList.length;
+    loadStreamUrl(episodeList[currEpisode].playPageUrl);
   };
 
   /**
@@ -272,37 +287,25 @@ export default function PlayerPage() {
 
   return (
     <>
-      {streamUrl ? (
-        <Box safeAreaTop>
-          {castState !== CastState.CONNECTED && (
+      <Box safeAreaTop>
+        {castState !== CastState.CONNECTED &&
+          (streamUrl ? (
             <Video inFullscreen={inFullscreen} streamUrl={streamUrl} setInFullsreen={setInFullsreen} />
-          )}
-          <VideoBar
-            castState={castState}
-            favoriting={favoriting}
-            favorited={favorite !== null}
-            currEpisode={historyStatus.currEpisode}
-            playPageUrl={episodes[historyStatus.currEpisode].playPageUrl}
-            episodesLength={episodes.length}
-            onFavorite={onFavorite}
-            onCancelFavorite={onCancelFavorite}
-            onEpisodeChange={onEpisodeChange}
-          />
-        </Box>
-      ) : (
-        <Box safeAreaTop>
-          {castState !== CastState.CONNECTED && <Spinner size="lg" className="h-[200px] bg-black" />}
-          <Row className="h-10 items-center p-3" space={5}>
-            {castState === CastState.CONNECTED && <Skeleton size="5" rounded="full" startColor="pink.200" />}
-            <Skeleton size="5" rounded="full" startColor="pink.200" />
-            <Skeleton size="5" rounded="full" startColor="pink.200" />
-            <Skeleton size="5" />
-            <Spacer />
-            <Skeleton size="5" rounded="full" startColor="pink.200" />
-            <Skeleton size="5" rounded="full" startColor="pink.200" />
-          </Row>
-        </Box>
-      )}
+          ) : (
+            <Spinner size="lg" className="h-[200px] bg-black" />
+          ))}
+        <VideoBar
+          castState={castState}
+          favoriting={favoriting}
+          favorited={!!favorite}
+          currEpisode={historyStatus.currEpisode}
+          playPageUrl={episodes[historyStatus.currEpisode]?.playPageUrl}
+          episodesLength={episodes.length}
+          onFavorite={onFavorite}
+          onCancelFavorite={onCancelFavorite}
+          onEpisodeChange={onEpisodeChange}
+        />
+      </Box>
       <Box className="flex-1 mx-2 my-1 rounded-lg overflow-hidden border border-gray-200" safeAreaBottom>
         <VideoInfo {...videoInfo} />
         {episodes.length > 0 ? (
@@ -409,7 +412,7 @@ const VideoBar = ({
   favoriting: boolean;
   favorited: boolean;
   currEpisode: number;
-  playPageUrl: string;
+  playPageUrl: string | undefined;
   episodesLength: number;
   onFavorite: () => void;
   onCancelFavorite: () => void;
@@ -418,7 +421,7 @@ const VideoBar = ({
   const navigation = useNavigation<any>();
 
   return (
-    <Row>
+    <Row className="h-10 items-center p-3">
       {castState === CastState.CONNECTED && (
         <IconButton
           className="text-xl"
@@ -433,24 +436,28 @@ const VideoBar = ({
         <IconButton
           className="text-xl"
           borderRadius="full"
-          icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite-outline" />} />}
-          onPress={onFavorite}
+          icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite" />} />}
+          onPress={onCancelFavorite}
         />
       ) : (
         <IconButton
           className="text-xl"
           borderRadius="full"
-          icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite" />} />}
-          onPress={onCancelFavorite}
+          icon={<Icon className="text-pink-800" as={<MaterialIcons name="favorite-outline" />} />}
+          onPress={onFavorite}
         />
       )}
-      <IconButton
-        className="text-xl"
-        borderRadius="full"
-        icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
-        onPress={() => openBrowserAsync(playPageUrl)}
-      />
-      <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginTop: 8, marginLeft: 8 }} />
+      {playPageUrl && (
+        <>
+          <IconButton
+            className="text-xl"
+            borderRadius="full"
+            icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
+            onPress={() => openBrowserAsync(playPageUrl)}
+          />
+          {/* <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginTop: 8, marginLeft: 8 }} /> */}
+        </>
+      )}
       <Spacer />
       {currEpisode > 0 && (
         <IconButton

@@ -24,15 +24,15 @@ interface PlayerState {
   videoInfo: VideoInfo;
   historyStatus: HistoryStatus;
   favorite: Favorite | null;
-  episodes: Episode[];
   episodeSources: EpisodeSource[];
+  episodesBySourceIndex: { [id: number]: Episode[] };
   init: () => void;
   setStreamUrl: (v: string | null) => void;
   setVideoInfo: (v: VideoInfo) => void;
   setHistoryStatus: (v: HistoryStatus) => void;
   setFavorite: (v: Favorite | null) => void;
-  setEpisodes: (v: Episode[]) => void;
   setEpisodeSources: (v: EpisodeSource[]) => void;
+  setEpisodesBySourceIndex: (v: { [id: number]: Episode[] }) => void;
 }
 
 const initState = {
@@ -50,8 +50,8 @@ const initState = {
     lastWatchTime: new Date().toISOString(),
   },
   favorite: null,
-  episodes: [],
   episodeSources: [],
+  episodesBySourceIndex: {},
 };
 
 export const usePlayer = create<PlayerState>()(set => ({
@@ -64,6 +64,6 @@ export const usePlayer = create<PlayerState>()(set => ({
       return { historyStatus: v };
     }),
   setFavorite: v => set(() => ({ favorite: v })),
-  setEpisodes: v => set(() => ({ episodes: v })),
   setEpisodeSources: v => set(() => ({ episodeSources: v })),
+  setEpisodesBySourceIndex: v => set(() => ({ episodesBySourceIndex: v })),
 }));

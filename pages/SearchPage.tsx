@@ -53,9 +53,9 @@ export default function SearchPage() {
     const init = async () => {
       initSearchList();
       setLoading(true);
-      await Promise.all(
-        sourceList.filter(id => byId[id].isEnabled === 1).map(id => loadSearchItemListBySource(byId[id]))
-      );
+      for (const id of sourceList.filter(id => byId[id].isEnabled === 1)) {
+        await loadSearchItemListBySource(byId[id]);
+      }
       setLoading(false);
     };
 

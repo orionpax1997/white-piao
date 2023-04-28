@@ -13,6 +13,8 @@ export class Episode extends Entity {
   playPageUrl!: string;
   /** 收藏 id */
   favoriteId?: number;
+  /** 来源下标 */
+  sourceIndex!: number;
 
   static fromMap(map: { [key: string]: any }): Episode {
     const e = new Episode();
@@ -21,6 +23,7 @@ export class Episode extends Entity {
     e.title = map[EPISODE_CONSTANTS.FIELDS.TITLE];
     e.playPageUrl = map[EPISODE_CONSTANTS.FIELDS.PLAY_PAGE_URL];
     e.favoriteId = map[EPISODE_CONSTANTS.FIELDS.FAVORITE_ID];
+    e.sourceIndex = map[EPISODE_CONSTANTS.FIELDS.SOURCE_INDEX];
     return e;
   }
 
@@ -31,10 +34,11 @@ export class Episode extends Entity {
       [EPISODE_CONSTANTS.FIELDS.TITLE]: this.title,
       [EPISODE_CONSTANTS.FIELDS.PLAY_PAGE_URL]: this.playPageUrl,
       [EPISODE_CONSTANTS.FIELDS.FAVORITE_ID]: this.favoriteId,
+      [EPISODE_CONSTANTS.FIELDS.SOURCE_INDEX]: this.sourceIndex,
     };
   }
 
   toParams(): any[] {
-    return [this.index, this.title, this.playPageUrl, this.favoriteId];
+    return [this.index, this.title, this.playPageUrl, this.favoriteId, this.sourceIndex];
   }
 }
