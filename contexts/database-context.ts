@@ -127,6 +127,13 @@ const initConfigData = async () => {
     )}) VALUES(${CONFIG_CONSTANTS.FIELD_NAMES.map(_ => '?').join(',')})`,
     ['resouce-server-url', `https://white-piao.humblex.top`]
   );
+
+  await execSql(
+    `INSERT INTO ${CONFIG_CONSTANTS.TABLE_NAME}(${CONFIG_CONSTANTS.FIELD_NAMES.join(
+      ','
+    )}) VALUES(${CONFIG_CONSTANTS.FIELD_NAMES.map(_ => '?').join(',')})`,
+    ['concurrency-request-number', `2`]
+  );
 };
 
 const dropSourceTable = async () => {

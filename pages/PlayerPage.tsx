@@ -71,9 +71,8 @@ export default function PlayerPage() {
   } = useFavorite();
   const { byId } = useSource();
   const toast = useToast();
-  // const castState = useCastState();
-  const castState = null;
-  // const client = useRemoteMediaClient();
+  const castState = useCastState();
+  const client = useRemoteMediaClient();
 
   const episodes = episodesBySourceIndex[historyStatus.currEpisodeSource] ?? [];
   const source = byId[videoInfo.sourceId];
@@ -123,19 +122,19 @@ export default function PlayerPage() {
   }, []);
 
   // 设置投屏
-  // useEffect(() => {
-  //   if (client && castState === CastState.CONNECTED && streamUrl) {
-  //     client
-  //       .loadMedia({
-  //         autoplay: true,
-  //         mediaInfo: {
-  //           contentUrl: streamUrl,
-  //           contentType: 'application/x-mpegURL',
-  //         },
-  //       })
-  //       .catch(err => toast.show({ description: err }));
-  //   }
-  // }, [client, castState, streamUrl]);
+  useEffect(() => {
+    if (client && castState === CastState.CONNECTED && streamUrl) {
+      client
+        .loadMedia({
+          autoplay: true,
+          mediaInfo: {
+            contentUrl: streamUrl,
+            contentType: 'application/x-mpegURL',
+          },
+        })
+        .catch(err => toast.show({ description: err }));
+    }
+  }, [client, castState, streamUrl]);
 
   /**
    * 加载目录
@@ -455,7 +454,7 @@ const VideoBar = ({
             icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
             onPress={() => openBrowserAsync(playPageUrl)}
           />
-          {/* <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginTop: 8, marginLeft: 8 }} /> */}
+          <CastButton style={{ tintColor: 'black', marginLeft: 24 }} />
         </>
       )}
       <Spacer />

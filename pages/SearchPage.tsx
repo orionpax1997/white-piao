@@ -1,10 +1,12 @@
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
-import { ScrollView, useToast } from 'native-base';
+import split from 'just-split';
+import { Box, ScrollView, useToast } from 'native-base';
 import { useEffect, useState } from 'react';
+import ProgressBar from 'react-native-animated-progress';
 
-import { WithLoading, VideoInfo, PressableCard } from '../components';
-import { usePlayer, useSource, useSearchList } from '../hooks';
+import { VideoInfo, PressableCard } from '../components';
+import { usePlayer, useSource, useSearchList, useConfig } from '../hooks';
 import { Favorite, Source } from '../modals';
 import { SourceProvider } from '../providers';
 
@@ -12,6 +14,7 @@ const sourceProvider = SourceProvider.getProvider();
 
 export default function SearchPage() {
   const [loading, setLoading] = useState(false);
+  const { concurrencyNumber } = useConfig();
   const { list: sourceList, byId, setById } = useSource();
   const { init: initVideoInfo, setVideoInfo } = usePlayer();
   const { list: searchItemList, init: initSearchList, concat } = useSearchList();
@@ -53,8 +56,12 @@ export default function SearchPage() {
     const init = async () => {
       initSearchList();
       setLoading(true);
-      for (const id of sourceList.filter(id => byId[id].isEnabled === 1)) {
-        await loadSearchItemListBySource(byId[id]);
+      const sourceSplit = split(
+        sourceList.filter(id => byId[id].isEnabled === 1),
+        parseInt(concurrencyNumber?.value ?? '2', 10)
+      );
+      for (const sourceIds of sourceSplit) {
+        await Promise.all(sourceIds.map(id => loadSearchItemListBySource(byId[id])));
       }
       setLoading(false);
     };
@@ -69,7 +76,8 @@ export default function SearchPage() {
   };
 
   return (
-    <WithLoading loading={loading}>
+    <Box>
+      {loading && <ProgressBar indeterminate backgroundColor="#23d3ee" />}
       <ScrollView>
         {searchItemList.map((item, index) => (
           <PressableCard key={index} onPress={() => onFavoriteCardPress(item)}>
@@ -77,6 +85,6 @@ export default function SearchPage() {
           </PressableCard>
         ))}
       </ScrollView>
-    </WithLoading>
+    </Box>
   );
 }
