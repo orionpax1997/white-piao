@@ -1,4 +1,5 @@
 import { SOURCE_CONSTANTS } from '../constants';
+import { Discovery } from './discovery';
 import { Entity } from './entity';
 
 /**
@@ -18,11 +19,15 @@ export class Source extends Entity {
   /** 搜索时间 */
   searchTime!: number;
   /** 搜索表达式 */
-  searchScript!: string;
-  /** 发现目录表达式 */
-  findSeriesScript!: string;
-  /** 发现流表达式 */
-  findStreamScript!: string;
+  searchScript?: string;
+  /** 获取剧集表达式 */
+  findSeriesScript?: string;
+  /** 获取视频流表达式 */
+  findStreamScript?: string;
+  /** 获取发现表达式 */
+  findDiscoveryScript?: string;
+  /** 发现表达式 */
+  discoveryScript?: string;
   /** 创建时间 */
   createdAt!: string;
   /** 修改时间 */
@@ -31,6 +36,8 @@ export class Source extends Entity {
   resourceServerUrl!: string;
   /** 是否启用 0: 停用 1: 启用 */
   isEnabled!: number;
+  /** 关联的发现 */
+  discoveryList?: Discovery[];
 
   static fromMap(map: { [key: string]: any }): Source {
     const s = new Source();
@@ -44,6 +51,8 @@ export class Source extends Entity {
     s.searchScript = map[SOURCE_CONSTANTS.FIELDS.SEARCH_SCRIPT];
     s.findSeriesScript = map[SOURCE_CONSTANTS.FIELDS.FIND_SERIES_SCRIPT];
     s.findStreamScript = map[SOURCE_CONSTANTS.FIELDS.FIND_STREAM_SCRIPT];
+    s.findDiscoveryScript = map[SOURCE_CONSTANTS.FIELDS.FIND_DISCOVERY_SCRIPT];
+    s.discoveryScript = map[SOURCE_CONSTANTS.FIELDS.DISCOVERY_SCRIPT];
     s.createdAt = map[SOURCE_CONSTANTS.FIELDS.CREATED_AT];
     s.updatedAt = map[SOURCE_CONSTANTS.FIELDS.UPDATED_AT];
     s.resourceServerUrl = map[SOURCE_CONSTANTS.FIELDS.RESOURCE_SERVER_URL];
@@ -63,6 +72,8 @@ export class Source extends Entity {
       [SOURCE_CONSTANTS.FIELDS.SEARCH_SCRIPT]: this.searchScript,
       [SOURCE_CONSTANTS.FIELDS.FIND_SERIES_SCRIPT]: this.findSeriesScript,
       [SOURCE_CONSTANTS.FIELDS.FIND_STREAM_SCRIPT]: this.findStreamScript,
+      [SOURCE_CONSTANTS.FIELDS.FIND_DISCOVERY_SCRIPT]: this.findDiscoveryScript,
+      [SOURCE_CONSTANTS.FIELDS.DISCOVERY_SCRIPT]: this.discoveryScript,
       [SOURCE_CONSTANTS.FIELDS.CREATED_AT]: this.createdAt,
       [SOURCE_CONSTANTS.FIELDS.UPDATED_AT]: this.updatedAt,
       [SOURCE_CONSTANTS.FIELDS.RESOURCE_SERVER_URL]: this.resourceServerUrl,
@@ -81,6 +92,8 @@ export class Source extends Entity {
       this.searchScript,
       this.findSeriesScript,
       this.findStreamScript,
+      this.findDiscoveryScript,
+      this.discoveryScript,
       this.createdAt,
       this.updatedAt,
       this.resourceServerUrl,

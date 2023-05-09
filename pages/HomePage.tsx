@@ -5,20 +5,20 @@ import { useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { TabView, SceneMap, TabBar } from 'react-native-tab-view';
 
+import DiscoveryPage from './DiscoveryPage';
 import FavoritesPage from './FavoritesPage';
 import SettingsPage from './SettingsPage';
-import SourcesPage from './SourcesPage';
 
 const sceneMap = SceneMap({
   favorite: FavoritesPage,
-  source: SourcesPage,
+  discovery: DiscoveryPage,
   settings: SettingsPage,
 });
 
 export default function HomePage() {
   const [routes] = useState([
     { key: 'favorite', title: '收藏' },
-    { key: 'source', title: '来源' },
+    { key: 'discovery', title: '发现' },
     { key: 'settings', title: '设置' },
   ]);
   const [index, setIndex] = useState(0);
@@ -95,16 +95,16 @@ const renderIcon = (key: string, focused: boolean) => {
   if (focused) {
     if (key === 'favorite') {
       return <MaterialIcons name="favorite" />;
-    } else if (key === 'source') {
-      return <Ionicons name="card" />;
+    } else if (key === 'discovery') {
+      return <Ionicons name="cube" />;
     } else {
       return <Ionicons name="settings" />;
     }
   } else {
     if (key === 'favorite') {
       return <MaterialIcons name="favorite-outline" />;
-    } else if (key === 'source') {
-      return <Ionicons name="card-outline" />;
+    } else if (key === 'discovery') {
+      return <Ionicons name="cube-outline" />;
     } else {
       return <Ionicons name="settings-outline" />;
     }

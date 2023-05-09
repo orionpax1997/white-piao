@@ -32,7 +32,8 @@ export default function FavoritesPage() {
     setEpisodeCountById,
   } = useFavorite();
   const { byId: sourceById } = useSource();
-  const { setVideoInfo, setHistoryStatus, setFavorite, setEpisodeSources, setEpisodesBySourceIndex } = usePlayer();
+  const { setVideoInfo, setNeedReload, setHistoryStatus, setFavorite, setEpisodeSources, setEpisodesBySourceIndex } =
+    usePlayer();
   const toast = useToast();
   const navigation = useNavigation<any>();
 
@@ -145,6 +146,7 @@ export default function FavoritesPage() {
 
   const onFavoritePress = (id: number) => {
     if (episodesById[id] && episodeSourcesById[id]) {
+      setNeedReload(true);
       setFavorite(byId[id]);
       setVideoInfo(byId[id]);
       setHistoryStatus(byId[id]);

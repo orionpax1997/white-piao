@@ -1,16 +1,19 @@
-import { MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons, Entypo } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
+import groupBy from 'just-group-by';
 import { Icon, Pressable, Text, Column, Row, Heading, Modal, FormControl, Input, Button, useToast } from 'native-base';
 import { useEffect, useState, ReactNode } from 'react';
 
 import { WithLoading } from '../components';
-import { CONFIG_CONSTANTS, SOURCE_CONSTANTS } from '../constants';
+import { CONFIG_CONSTANTS, SOURCE_CONSTANTS, DISCOVERY_CONSTANTS } from '../constants';
 import { useSource, useConfig } from '../hooks';
-import { Config, Source } from '../modals';
-import { ConfigProvider, SourceProvider } from '../providers';
+import { Config, Discovery, Source } from '../modals';
+import { ConfigProvider, SourceProvider, DiscoveryProvider } from '../providers';
 
 const configProvider = ConfigProvider.getProvider();
 const sourceProvider = SourceProvider.getProvider();
+const discoveryProvider = DiscoveryProvider.getProvider();
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
@@ -19,6 +22,7 @@ export default function SettingsPage() {
   const { serverUrl, concurrencyNumber, setServerUrl, setConcurrencyNumber } = useConfig();
   const { needReSync, setById, setList, setNeedReSync } = useSource();
   const toast = useToast();
+  const navigation = useNavigation<any>();
 
   useEffect(() => {
     const init = async () => {
@@ -28,6 +32,28 @@ export default function SettingsPage() {
         'concurrency-request-number',
       ]);
       setConcurrencyNumber(Config.fromMap(concurrencyNumberConfig));
+
+      const sourceRows = await sourceProvider.read();
+      // 资源为空时，自动同步一下
+      if (sourceRows.length === 0) {
+        setNeedReSync(true);
+        toast.show({ description: '资源为空, 正在自动初始化...' });
+      } else {
+        const discoveryRows = await discoveryProvider.read();
+        const discoveryGroup = groupBy(
+          discoveryRows.map(row => Discovery.fromMap(row)),
+          discovery => discovery.sourceId
+        );
+        setById({
+          ...sourceRows.reduce((byId, item) => {
+            byId[item[SOURCE_CONSTANTS.IDENTIFIER]] = Source.fromMap(item);
+            byId[item[SOURCE_CONSTANTS.IDENTIFIER]].discoveryList = discoveryGroup[item[SOURCE_CONSTANTS.IDENTIFIER]];
+            return byId;
+          }, {}),
+        });
+        setList(sourceRows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
+        setNeedReSync(false);
+      }
     };
 
     init();
@@ -51,25 +77,53 @@ export default function SettingsPage() {
             await Promise.all(
               res.data.map(async (item: any) => {
                 const idx = objectIds.indexOf(item.objectId);
+                let source: Source;
                 if (idx !== -1) {
-                  await sourceProvider.update(Source.fromMap({ ...sources[idx], ...item }));
+                  source = Source.fromMap({ ...sources[idx], ...item });
+                  await sourceProvider.update(source);
                 } else {
-                  await sourceProvider.create(
+                  source = await sourceProvider.create(
                     Source.fromMap({ ...item, resourceServerUrl: serverUrl.value, isEnabled: 1 })
                   );
+                }
+                // 添加发现
+                if (source.findDiscoveryScript) {
+                  try {
+                    const res = await axios.post(
+                      `${source.resourceServerUrl}/api/run/findDiscovery`,
+                      {
+                        script: source.findDiscoveryScript,
+                      },
+                      { timeout: 5000 }
+                    );
+
+                    await discoveryProvider.delete(`${DISCOVERY_CONSTANTS.FIELDS.SOURCE_ID} = ?`, [source.id!]);
+                    await Promise.all(
+                      res.data.data.map(async (item: any) => {
+                        await discoveryProvider.create(Discovery.fromMap({ ...item, sourceId: source.id }));
+                      })
+                    );
+                  } catch {}
                 }
               })
             );
             toast.show({ description: '同步成功' });
 
-            const rows = await sourceProvider.read();
+            const discoveryRows = await discoveryProvider.read();
+            const discoveryGroup = groupBy(
+              discoveryRows.map(row => Discovery.fromMap(row)),
+              discovery => discovery.sourceId
+            );
+            const sourceRows = await sourceProvider.read();
             setById({
-              ...rows.reduce((byId, item) => {
+              ...sourceRows.reduce((byId, item) => {
                 byId[item[SOURCE_CONSTANTS.IDENTIFIER]] = Source.fromMap(item);
+                byId[item[SOURCE_CONSTANTS.IDENTIFIER]].discoveryList =
+                  discoveryGroup[item[SOURCE_CONSTANTS.IDENTIFIER]];
                 return byId;
               }, {}),
             });
-            setList(rows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
+            setList(sourceRows.map(item => item[SOURCE_CONSTANTS.IDENTIFIER]));
             setNeedReSync(false);
           }
         }
@@ -120,6 +174,12 @@ export default function SettingsPage() {
           description={serverUrl?.value ?? 'loading...'}
           icon={<MaterialCommunityIcons name="web" />}
           onPress={() => setShowEditResourceServerUrl(true)}
+        />
+        <Item
+          title={'资源管理'}
+          description={'管理可用的资源网站'}
+          icon={<MaterialIcons name="source" />}
+          onPress={() => navigation.navigate('SourcesPage')}
         />
         <Item
           title={'同步资源'}

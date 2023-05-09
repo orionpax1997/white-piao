@@ -20,6 +20,7 @@ export type HistoryStatus = {
 };
 
 interface PlayerState {
+  needReload: boolean;
   streamUrl: string | null;
   videoInfo: VideoInfo;
   historyStatus: HistoryStatus;
@@ -27,6 +28,7 @@ interface PlayerState {
   episodeSources: EpisodeSource[];
   episodesBySourceIndex: { [id: number]: Episode[] };
   init: () => void;
+  setNeedReload: (v: boolean) => void;
   setStreamUrl: (v: string | null) => void;
   setVideoInfo: (v: VideoInfo) => void;
   setHistoryStatus: (v: HistoryStatus) => void;
@@ -36,6 +38,7 @@ interface PlayerState {
 }
 
 const initState = {
+  needReload: true,
   streamUrl: null,
   videoInfo: {
     title: '',
@@ -57,6 +60,7 @@ const initState = {
 export const usePlayer = create<PlayerState>()(set => ({
   ...initState,
   init: () => set(() => ({ ...initState })),
+  setNeedReload: v => set(() => ({ needReload: v })),
   setStreamUrl: v => set(() => ({ streamUrl: v })),
   setVideoInfo: v => set(() => ({ videoInfo: v })),
   setHistoryStatus: v =>

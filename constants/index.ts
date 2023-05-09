@@ -5,3 +5,4 @@ export * from './source-constants';
 export * from './episode-constants';
 export * from './episode-source-constants';
 export * from './favorite-constants';
+export * from './discovery-constants';

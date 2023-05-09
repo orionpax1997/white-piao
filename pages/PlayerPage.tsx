@@ -45,12 +45,14 @@ export default function PlayerPage() {
   const [favoriting, setFavoriting] = useState(false);
   const [inFullscreen, setInFullsreen] = useState(false);
   const {
+    needReload,
     streamUrl,
     videoInfo,
     historyStatus,
     favorite,
     episodeSources,
     episodesBySourceIndex,
+    setNeedReload,
     setStreamUrl,
     setEpisodeSources,
     setHistoryStatus,
@@ -72,6 +74,7 @@ export default function PlayerPage() {
   const { byId } = useSource();
   const toast = useToast();
   const castState = useCastState();
+  const navigation = useNavigation<any>();
   const client = useRemoteMediaClient();
 
   const episodes = episodesBySourceIndex[historyStatus.currEpisodeSource] ?? [];
@@ -89,27 +92,30 @@ export default function PlayerPage() {
       if (playPageUrl) {
         loadStreamUrl(playPageUrl);
       }
+      setNeedReload(false);
     };
 
-    init();
-  }, []);
+    if (needReload) {
+      init();
+    }
+  }, [needReload]);
 
   useEffect(() => {
-    return () => {
-      (async () => {
-        // 退出全屏
-        if (inFullscreen) {
-          await setStatusBarHidden(false, 'none');
-          setInFullsreen(!inFullscreen);
-          lockAsync(OrientationLock.DEFAULT);
-        }
-        // 设置状态栏
-        setStatusBarStyle('dark');
-        setStatusBarBackgroundColor('#0891b2', false);
-        // 修改历史状态记录
-        await updateFavoriteHistoryStatus(historyStatus);
-      })();
-    };
+    const unsubscribe = navigation.addListener('beforeRemove', async () => {
+      // 退出全屏
+      if (inFullscreen) {
+        await setStatusBarHidden(false, 'none');
+        setInFullsreen(!inFullscreen);
+        lockAsync(OrientationLock.DEFAULT);
+      }
+      // 设置状态栏
+      setStatusBarStyle('dark');
+      setStatusBarBackgroundColor('#0891b2', false);
+      // 修改历史状态记录
+      await updateFavoriteHistoryStatus(historyStatus);
+    });
+
+    return unsubscribe;
   }, [historyStatus, inFullscreen, favorite]);
 
   // 设置屏幕常亮
@@ -298,6 +304,7 @@ export default function PlayerPage() {
           favoriting={favoriting}
           favorited={!!favorite}
           currEpisode={historyStatus.currEpisode}
+          keyword={videoInfo.title}
           playPageUrl={episodes[historyStatus.currEpisode]?.playPageUrl}
           episodesLength={episodes.length}
           onFavorite={onFavorite}
@@ -401,6 +408,7 @@ const VideoBar = ({
   favoriting,
   favorited,
   currEpisode,
+  keyword,
   playPageUrl,
   episodesLength,
   onFavorite,
@@ -411,6 +419,7 @@ const VideoBar = ({
   favoriting: boolean;
   favorited: boolean;
   currEpisode: number;
+  keyword: string;
   playPageUrl: string | undefined;
   episodesLength: number;
   onFavorite: () => void;
@@ -451,10 +460,16 @@ const VideoBar = ({
           <IconButton
             className="text-xl"
             borderRadius="full"
+            icon={<Icon className="text-pink-800" as={<Ionicons name="search" />} />}
+            onPress={() => navigation.navigate('SearchPage', { keyword })}
+          />
+          <IconButton
+            className="text-xl"
+            borderRadius="full"
             icon={<Icon className="text-pink-800" as={<MaterialCommunityIcons name="web" />} />}
             onPress={() => openBrowserAsync(playPageUrl)}
           />
-          <CastButton style={{ tintColor: 'black', marginLeft: 24 }} />
+          <CastButton style={{ width: 24, height: 24, tintColor: 'black', marginLeft: 12 }} />
         </>
       )}
       <Spacer />

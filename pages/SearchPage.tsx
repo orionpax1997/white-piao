@@ -57,7 +57,7 @@ export default function SearchPage() {
       initSearchList();
       setLoading(true);
       const sourceSplit = split(
-        sourceList.filter(id => byId[id].isEnabled === 1),
+        sourceList.filter(id => byId[id].isEnabled === 1 && byId[id].searchScript),
         parseInt(concurrencyNumber?.value ?? '2', 10)
       );
       for (const sourceIds of sourceSplit) {
