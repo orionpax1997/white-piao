@@ -37,6 +37,28 @@ import { HistoryStatus, useFavorite, usePlayer, useSource } from '../hooks';
 import { Episode, EpisodeSource, Favorite } from '../modals';
 import { FavoriteProvider, EpisodeProvider, EpisodeSourceProvider } from '../providers';
 
+// axios 添加请求重试拦截器
+axios.interceptors.response.use(undefined, err => {
+  const { config, response } = err;
+  if (!config || !config.data) {
+    return Promise.reject(err);
+  }
+  const data = JSON.parse(config.data);
+  if (!data.retry) {
+    return Promise.reject(err);
+  }
+  if (response.status !== 408 && response.status !== 503) {
+    return Promise.reject(err);
+  }
+  data.retry -= 1;
+  const delayRetryRequest = new Promise<void>(resolve => {
+    setTimeout(() => {
+      resolve();
+    }, 1000);
+  });
+  config.data = JSON.stringify(data);
+  return delayRetryRequest.then(() => axios(config));
+});
 const favoriteProvider = FavoriteProvider.getProvider();
 const episodeProvider = EpisodeProvider.getProvider();
 const episodeSourceProvider = EpisodeSourceProvider.getProvider();
@@ -193,6 +215,7 @@ export default function PlayerPage() {
       const res = await axios.post(`${source.resourceServerUrl}/api/run/findStream`, {
         script: source.findStreamScript,
         input: playPageUrl,
+        retry: 3,
       });
       setStreamUrl(res.data.data);
     } catch {
